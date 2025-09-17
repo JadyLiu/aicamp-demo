@@ -1,1 +1,3 @@
-# AI Camp Demo - Sep 20, 2025 - Agentic AI in Production
+# AI Camp Demo - Agentic AI in Production
+
+This is not ready for production.
