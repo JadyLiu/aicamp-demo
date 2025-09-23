@@ -28,7 +28,11 @@ mistral_client = Mistral(api_key=os.environ["MISTRAL_API_KEY"])
 WORKFLOW_NAME = "docai-jd-workflow"
 
 class InputData(BaseModel):
-    invoice_id: Optional[str] = Field(None, description="Invoice id")
+    invoice_id: Optional[str] = Field(None, description="Invoice or receipt ID")
+    receipt_date: Optional[str] = Field(None, description="Date of the receipt in YYYY-MM-DD format if available")
+    bill_to_name: Optional[str] = Field(None, description="Name of the customer or entity billed")
+    total_amount: Optional[str] = Field(None, description="Total amount shown on the receipt")
+    payment_instructions: Optional[str] = Field(None, description="Payment instructions such as PayPal email or bank transfer details")
 
 class OCRParams(BaseModel):
     document_url: str = Field(description="Publicly accessible document URL")
@@ -53,7 +57,7 @@ class ReviewDecision(BaseModel):
     data: dict
 
 class HumanReviewSignal(BaseModel):
-    approved: bool
+    approved: bool = False
     corrected_invoice_id: Optional[str] = None
     comments: Optional[str] = None
 
@@ -96,30 +100,34 @@ async def review_activity(params: OCRResult) -> ReviewResult:
     Input OCR JSON:
     {json.dumps(ocr_output, indent=2)}
 
-    Rules:
-    - If invoice_id exists and is a non-empty string, return:
-      {{
-        "status": "passed",
-        "reason": "",
-        "data": <document_annotation JSON only>
-      }}
+    Validation Rules:
+    - invoice_id: must exist and be a non-empty string.
+    - receipt_date: must exist and be a non-empty string. If not found, leave null.
+    - bill_to_name: must exist and be a non-empty string.
+    - total_amount: must exist and be a non-empty string, should look like a valid currency or number.
+    - payment_instructions: optional, but if present, must reflect actual instructions (e.g., PayPal email, bank transfer account).
 
-    - If invoice_id is missing or invalid, return:
-      {{
-        "status": "failed",
-        "reason": "short reason here",
-        "data": <document_annotation JSON only>
+    Expected Response Format:
+    {{
+      "status": "passed" | "failed",
+      "reason": "short reason here (only if failed, else empty)",
+      "data": {{
+        "invoice_id": "...",
+        "receipt_date": "...",
+        "bill_to_name": "...",
+        "total_amount": "...",
+        "payment_instructions": "..."
       }}
-    
+    }}
+
     Important:
-    - Do not invent an invoice_id. Only use what is in the OCR output.
-    - The "data" field must be the parsed JSON object from `document_annotation`, not a string.
-    - Do not include the rest of the OCR payload.
+    - Do not invent values. Only use what exists in the OCR output.
+    - The "data" field must only contain the validated fields, with null if missing.
     - Do not include any text outside of the JSON.
     """
 
-    # agent_response = review_agent(prompt)
-    # workflow_logger.info(f"agent_response str: {str(agent_response)}")
+    agent_response = review_agent(prompt)
+    workflow_logger.info(f"agent_response str: {str(agent_response)}")
     try:
         decision: ReviewDecision = await review_agent.structured_output_async(
             ReviewDecision, prompt
@@ -152,6 +160,7 @@ class DocAIWorkflow:
     def __init__(self) -> None:
         self._is_hitl_approved: Optional[bool] = None
         self._corrections: Optional[dict] = None
+        self._hitl_comments: Optional[str] = None
         self.pending_results: list[Any] = []
         self.steps_completed: list[str] = []
 
@@ -164,6 +173,7 @@ class DocAIWorkflow:
             f"corrected_invoice_id={signal.corrected_invoice_id}, comments={signal.comments}"
         )
         self._is_hitl_approved = signal.approved
+        self._hitl_comments = signal.comments
         if signal.corrected_invoice_id:
             self._corrections = {"invoice_id": signal.corrected_invoice_id}
 
@@ -171,6 +181,7 @@ class DocAIWorkflow:
     async def run(self, params: WorkflowParams) -> WorkflowResult:
         workflow_logger.info(f"WorkflowParams received: {params.model_dump()}")
         all_results = []
+
         for i, url in enumerate(params.document_urls, start=1):
             # Step 1: Run OCR
             with abraxas.record_event_progress(f"OCR Document #{i}: {url}"):
@@ -193,14 +204,22 @@ class DocAIWorkflow:
                 if self._is_hitl_approved:
                     workflow_logger.info(f"[HITL] Doc #{i} approved by human")
                     review_result.status = "passed"
+                    human_comment = self._hitl_comments or ""
+                    if human_comment:
+                        review_result.reason = f"{review_result.reason} | Human review: {human_comment}"
                     if self._corrections:
                         review_result.data.update(self._corrections)
                 else:
                     workflow_logger.info(f"[HITL] Doc #{i} rejected by human")
                     review_result.status = "failed"
-                    review_result.reason = "Rejected by human"
-                    review_result.data = {"status": "failed", "reason": "Rejected by human"}
-            
+
+                    human_comment = self._hitl_comments or ""
+                    if human_comment:
+                        review_result.reason = f"{review_result.reason} | Human review: {human_comment}"
+                    else:
+                        review_result.reason = "Rejected by human"
+
+                    review_result.data = {"status": "failed", "reason": review_result.reason}
 
             # Step 4: Save final result to MongoDB
             with abraxas.record_event_progress(f"Saving Document #{i} to MongoDB"):
