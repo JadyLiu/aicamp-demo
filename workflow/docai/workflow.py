@@ -17,10 +17,14 @@ load_dotenv()
 # Configure workflow logger
 workflow_logger = logging.getLogger("docai.workflow")
 
-# Setup Mongo client (hardcoded URI for now)
-mongo_client = AsyncMongoClient("mongodb://localhost:27017")
-db = mongo_client["docai_demo"]
-collection = db["workflow_results"]
+# Setup Mongo client using environment variables
+mongo_uri = os.getenv("MONGO_URI", "mongodb://localhost:27017")
+mongo_db_name = os.getenv("MONGO_DB_NAME", "docai_demo")
+mongo_collection_name = os.getenv("MONGO_COLLECTION_NAME", "workflow_results")
+
+mongo_client = AsyncMongoClient(mongo_uri)
+db = mongo_client[mongo_db_name]
+collection = db[mongo_collection_name]
 
 # Setup persistent Mistral client
 mistral_client = Mistral(api_key=os.environ["MISTRAL_API_KEY"])

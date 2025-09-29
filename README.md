@@ -9,7 +9,8 @@ DocAI Agent is an IdP system that combines Optical Character Recognition (OCR) w
 Before you begin, ensure you have:
 
 1. A Mistral workflow API key (required for OCR and AI processing)
-2. MongoDB installed and running locally (you can connect using `bin/mongosh "mongodb://localhost:27017"`)
+2. A Mistral API key (required for OCR and AI processing)
+3. MongoDB installed and running locally (you can connect using `bin/mongosh "mongodb://localhost:27017"`)
 
 ## Features
 
@@ -44,10 +45,19 @@ uv sync
 Create a `.env` file with the following variables:
 
 ```env
-WORKFLOW_API_KEY=your_workflow_api_key
-WORKFLOW_NAMESPACE=your_workflow_namespace
+# Required API keys
 MISTRAL_API_KEY=your_mistral_api_key
+ABRAXAS_API_KEY=your_abraxas_api_key
+
+# Abraxas configuration
+TEMPORAL_NAMESPACE=your_temporal_namespace
+ABRAXAS_ENDPOINT=your_abraxas_endpoint
+ABRAXAS_ALLOW_OVERRIDE_NAMESPACE=true
+
+# MongoDB configuration
 MONGO_URI=mongodb://localhost:27017
+MONGO_DB_NAME=docai_demo
+MONGO_COLLECTION_NAME=workflow_results
 ```
 
 ## Usage
