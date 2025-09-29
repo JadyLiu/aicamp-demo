@@ -47,11 +47,11 @@ Create a `.env` file with the following variables:
 ```env
 # Required API keys
 MISTRAL_API_KEY=your_mistral_api_key
-ABRAXAS_API_KEY=your_abraxas_api_key
+ABRAXAS_API_KEY=your_mistral_workflow_api_key
 
-# Abraxas configuration
+# Workflow configuration
 TEMPORAL_NAMESPACE=your_temporal_namespace
-ABRAXAS_ENDPOINT=your_abraxas_endpoint
+ABRAXAS_ENDPOINT=your_mistral_workflow_endpoint
 ABRAXAS_ALLOW_OVERRIDE_NAMESPACE=true
 
 # MongoDB configuration
@@ -65,7 +65,7 @@ MONGO_COLLECTION_NAME=workflow_results
 Run the worker:
 
 ```bash
-python worker.py
+uv run worker.py
 ```
 
 ## Workflow Details
